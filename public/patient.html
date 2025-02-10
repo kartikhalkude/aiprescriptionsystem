@@ -34,6 +34,37 @@
         <h2 class="text-2xl font-semibold mb-4">Describe Your Symptoms</h2>
         <form id="symptomForm" class="space-y-4">
           <div>
+            <label class="block text-gray-700 mb-2">Patient Name:</label>
+            <input
+              type="text"
+              id="patientFullName"
+              required
+              class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-gray-700 mb-2">Age:</label>
+            <input
+              type="number"
+              id="patientAge"
+              required
+              class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <label class="block text-gray-700 mb-2">Preferred Language:</label>
+            <select
+              id="prescriptionLanguage"
+              class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+              required
+            >
+              <option value="English">English</option>
+              <option value="Marathi">Marathi</option>
+              <option value="Kannada">Kannada</option>
+              <option value="Hindi">Hindi</option>
+            </select>
+          </div>
+          <div>
             <label class="block text-gray-700 mb-2">Symptoms:</label>
             <textarea
               id="symptoms"
@@ -89,6 +120,7 @@
       </div>
     </div>
 
+
     <script>
       document.addEventListener("DOMContentLoaded", () => {
         if (!sessionStorage.getItem("token")) {
@@ -114,22 +146,40 @@
       }
 
       async function analyzeSymptoms() {
+        const name = document.getElementById("patientFullName").value;
+        const age = document.getElementById("patientAge").value;
+        const language = document.getElementById("prescriptionLanguage").value;
         const symptoms = document.getElementById("symptoms").value;
         const duration = document.getElementById("duration").value;
         const severity = document.getElementById("severity").value;
 
-        if (!symptoms || !duration || !severity) {
+        if (!name || !age || !symptoms || !duration || !severity) {
           alert("Please fill in all fields before analyzing.");
           return;
         }
 
-        const medicalPrompt = `Patient Symptoms: ${symptoms}, Duration: ${duration}, Severity: ${severity}/10. Generate a short prescription and recommendations for the doctor to review.`;
+        const medicalPrompt = `
+Patient Name: ${name}
+Age: ${age}
+Symptoms: ${symptoms}
+Duration: ${duration}
+Severity: ${severity}/10
+Preferred Language: ${language}
+
+Provide the following in HTML format inside a <div> dont add the start html and bold the following :
+- Patient details
+- Diagnosis
+- Dos and Don’ts for the condition
+- Suggest 1-2 commonly used medicines
+
+Ensure it is formatted properly in ${language}.
+`;
 
         try {
           const response = await puter.ai.chat(medicalPrompt);
           sessionStorage.setItem("aiDiagnosis", response);
 
-          document.getElementById("aiDiagnosisBox").textContent = response;
+          document.getElementById("aiDiagnosisBox").innerHTML = response; // Display AI response as HTML
           document.getElementById("aiDiagnosisBox").classList.remove("hidden");
           document
             .getElementById("submitSymptomsBtn")
@@ -145,6 +195,11 @@
         .addEventListener("submit", async (e) => {
           e.preventDefault();
 
+          const name = document.getElementById("patientFullName").value;
+          const age = document.getElementById("patientAge").value;
+          const language = document.getElementById(
+            "prescriptionLanguage"
+          ).value;
           const symptoms = document.getElementById("symptoms").value;
           const duration = document.getElementById("duration").value;
           const severity = document.getElementById("severity").value;
@@ -159,6 +214,9 @@
                 Authorization: `Bearer ${sessionStorage.getItem("token")}`,
               },
               body: JSON.stringify({
+                name,
+                age,
+                language,
                 symptoms,
                 duration,
                 severity,
@@ -183,7 +241,6 @@
             alert(error.message);
           }
         });
-
       async function loadPrescriptions() {
         try {
           const response = await fetch("/api/prescriptions", {
@@ -213,7 +270,7 @@
               p.aiDiagnosis || "No AI Analysis"
             }</div>
             
-            <div class="text-gray-600 mt-2"><strong>Prescribed Medications:</strong></div>
+            <div class="text-gray-600 mt-2"><strong>Prescribed Medications by Doctor:</strong></div>
             <ul class="list-disc pl-5 text-gray-700">
                 ${
                   p.medications && p.medications.length > 0
