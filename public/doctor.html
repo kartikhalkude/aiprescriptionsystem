@@ -275,6 +275,19 @@ function displayReviewHistory(prescriptions) {
                     <div class="font-semibold">Patient: ${p.patientId.name}</div>
                     <div class="text-gray-600">Symptoms: ${p.symptoms}</div>
                     <div class="text-gray-600">AI Diagnosis: ${p.aiDiagnosis || "No AI Analysis"}</div>
+                    <div class="text-gray-600 mt-2"><strong>Prescribed Medications by Doctor:</strong></div>
+            <ul class="list-disc pl-5 text-gray-700">
+                ${
+                  p.medications && p.medications.length > 0
+                    ? p.medications
+                        .map(
+                          (med) =>
+                            `<li>${med.name} - ${med.dosage} (${med.frequency})</li>`
+                        )
+                        .join("")
+                    : "<li>No medications prescribed</li>"
+                }
+            </ul>
                     <div class="text-gray-600">Doctor's Notes: ${p.doctorNotes || "No notes provided"}</div>
                     <div class="text-${p.status === 'approved' ? 'green' : 'red'}-600 font-semibold">
                         Status: ${p.status.charAt(0).toUpperCase() + p.status.slice(1)}
