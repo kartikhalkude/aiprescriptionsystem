@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doctor Portal</title>
+    <style>
+        /* Basic styling for the video call interface */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        /* Styling for incoming call notification */
+        .call-request {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            display: none;
+        }
+        /* Container for video elements */
+        .video-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        /* Style for video elements */
+        video {
+            width: 400px;
+            height: 300px;
+            background: #333;
+            border-radius: 8px;
+        }
+        /* Button styling */
+        button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        /* Accept call button */
+        .accept {
+            background: #28a745;
+            color: white;
+        }
+        /* Decline and end call buttons */
+        .decline, #endCall {
+            background: #dc3545;
+            color: white;
+        }
+        /* End call button initial state */
+        #endCall {
+            display: none;
+        }
+        /* Status message styling */
+        .status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Doctor Portal</h1>
+    
+    <!-- Incoming call notification -->
+    <div class="call-request" id="callRequest">
+        <h3>Incoming Call Request</h3>
+        <button class="accept" id="acceptCall">Accept Call</button>
+        <button class="decline" id="declineCall">Decline Call</button>
+    </div>
+
+    <!-- Call status and end call button -->
+    <p class="status" id="callStatus">Waiting for patient calls...</p>
+    <button id="endCall">End Call</button>
+
+    <!-- Video streams container -->
+    <div class="video-container">
+        <div>
+            <h3>Your Video</h3>
+            <video id="localVideo" autoplay playsinline muted></video>
+        </div>
+        <div>
+            <h3>Patient's Video</h3>
+            <video id="remoteVideo" autoplay playsinline></video>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        // Initialize Socket.io connection
+        const socket = io();
+        let localStream;
+        let peerConnection;
+        
+        // WebRTC configuration with STUN server
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' }
+            ]
+        };
+
+        // Handle incoming call request
+        socket.on('patient-calling', async () => {
+            document.getElementById('callRequest').style.display = 'block';
+            document.getElementById('callStatus').textContent = 'Incoming call...';
+        });
+
+        // Event listeners for call control buttons
+        document.getElementById('acceptCall').addEventListener('click', acceptCall);
+        document.getElementById('declineCall').addEventListener('click', declineCall);
+        document.getElementById('endCall').addEventListener('click', endCall);
+
+        // Function to accept incoming call
+        async function acceptCall() {
+            try {
+                // Get user's video and audio streams
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                document.getElementById('localVideo').srcObject = localStream;
+                
+                // Update UI
+                document.getElementById('callRequest').style.display = 'none';
+                document.getElementById('endCall').style.display = 'inline';
+                document.getElementById('callStatus').textContent = 'Call connected';
+                
+                // Notify server and create peer connection
+                socket.emit('call-accepted');
+                createPeerConnection();
+            } catch (err) {
+                console.error('Error accessing media devices:', err);
+                document.getElementById('callStatus').textContent = 'Failed to access camera/microphone';
+            }
+        }
+
+        // Function to decline incoming call
+        function declineCall() {
+            socket.emit('call-declined');
+            document.getElementById('callRequest').style.display = 'none';
+            document.getElementById('callStatus').textContent = 'Call declined';
+        }
+
+        // Function to end active call
+        function endCall() {
+            // Stop all tracks in the local stream
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            
+            // Close peer connection
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            // Reset video elements
+            document.getElementById('localVideo').srcObject = null;
+            document.getElementById('remoteVideo').srcObject = null;
+
+            // Update UI
+            document.getElementById('endCall').style.display = 'none';
+            document.getElementById('callStatus').textContent = 'Call ended';
+
+            // Notify server
+            socket.emit('call-ended');
+        }
+
+        // Handle incoming WebRTC offer
+        socket.on('offer', async (offer) => {
+            await peerConnection.setRemoteDescription(offer);
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('answer', answer);
+        });
+
+        // Handle incoming ICE candidates
+        socket.on('ice-candidate', async (candidate) => {
+            if (peerConnection) {
+                await peerConnection.addIceCandidate(candidate);
+            }
+        });
+
+        // Handle call ended by patient
+        socket.on('call-ended', endCall);
+
+        // Function to create and set up WebRTC peer connection
+        function createPeerConnection() {
+            peerConnection = new RTCPeerConnection(configuration);
+            
+            // Add local tracks to peer connection
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            // Handle incoming streams
+            peerConnection.ontrack = event => {
+                document.getElementById('remoteVideo').srcObject = event.streams[0];
+            };
+
+            // Handle and send ICE candidates
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    socket.emit('ice-candidate', event.candidate);
+                }
+            };
+        }
+    </script>
+</body>
+</html>
